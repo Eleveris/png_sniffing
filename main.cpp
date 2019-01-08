@@ -80,14 +80,16 @@ vector <tcp_seq> ack,seq;
 vector <unsigned> file_name;
 
 void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet){
+    cout <<"callback started\n";
     fstream image;
     static unsigned int count = 1;
     cout << count << " packet header: " << endl;
     cout << "Captured: " << hdr->caplen << " from total: " << hdr->len << endl;
     cout << "timestamp: " << hdr->ts.tv_sec << endl;
     count ++;
+    cout <<"dump\n";
     pcap_dump(user,hdr,packet);
-
+    cout <<"dumped\n";
 
 
     const struct sniff_ethernet *ethernet; /* The ethernet header */
@@ -223,84 +225,93 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
 
 int main(int argc, char* argv[]) {
     cout << "Hello, World!" << endl;
-
     char errbuf[PCAP_ERRBUF_SIZE];
     int errcode;
-    string ask;
-
-
-//    cout << "Print available devices? (Y/n):" << endl; //device list
-//    cin >> ask;
-//
-//    cout << endl;
-//    if ((ask == "y") or (ask == "Y")) {
-//        vector<pcap_if_t *> devices;
-//        list_devices(devices);
-//    }
-
-    string dev;
-    const char* devc;
     pcap_t *p;
-//    cout << "Print device: " << endl; //device input
-//    cin >> dev;
-//    devc = (char*)dev.c_str();
 
-    const char* devic = "wlx7062b8b49c52";
-    p = pcap_create(devic,errbuf);
 
+    //begin device
+    cout << "begin devices\n";
+    cout << "Print available devices? (Y/n):" << endl; //device list
+    char ask[30];
+    cin >> ask;
+    cout << ask << endl;
+    if ((ask[0] == 'y') or (ask[0] == 'Y')) {
+        vector<pcap_if_t *> devices;
+        list_devices(devices);
+    }
+
+    //palce for device input
+    cout << "print device name\n";
+    char input_device[30];
+    cin >> input_device;
+
+    const char* device = "wlx7062b8b49c52";
+    p = pcap_create(input_device,errbuf);
     const int snaplen = 65536;
     errcode = pcap_set_snaplen(p,snaplen);
-    //cout << "pcap_set_snaplen error code: " << errcode << endl;
+    cout << "pcap_set_snaplen error code: " << errcode << endl;
     errcode = pcap_set_promisc(p, 1);
-    //cout << "pcap_set_promisc error code: " << errcode << endl;
-//
-//    cout << "Print domain: ";
-//    cin >> ask;
-//    ask="tcp port 80 and host "+ask;
-    //const char* fil = ask.c_str();
+    cout << "pcap_set_promisc error code: " << errcode << endl;
+    //end device
 
-    const char *errDescr;
+
+    cout << "begin activate\n";
+    const char * errDescription;
     errcode = pcap_activate(p);
     if (errcode != 0){
-        errDescr = pcap_statustostr(errcode);
-        cout << "pcap error: " << errDescr;
-    }
-    else cout << "capturing" << endl;
+        errDescription = pcap_statustostr(errcode);
+        cout << "pcap error : " << errDescription <<"\n";
+        return 2;
 
+    }
+    else cout <<"pcap activated\n";
+
+    //begin filters
+    cout << "begin filers\n";
+    cout << "print host: \n";
+    char host [40];
+    cin >> host;
+    const char filter_inp[45] = "tcp port 80 and host ";
+    char * result_filter = (char *)malloc(sizeof(filter_inp)+sizeof(host)+1);
+    sprintf(result_filter, "%s%s", filter_inp, host);
+    //cout << result_filter;
+    auto * bpf = (bpf_program*) malloc(sizeof(bpf_program));
+    //const char filter[40] = "tcp port 80 and host libpng.org";
+    int comp_optim = 1;
+//    bpf_u_int32 netmask;
+
+    if (pcap_compile(p,bpf,result_filter,comp_optim,PCAP_NETMASK_UNKNOWN) != 0){
+        cout << "Couldn't parse filter:\n" << pcap_geterr(p);
+        return 2;
+    }
+    pcap_setfilter(p,bpf);
+    //end filters
+
+    //begin file dumper
+    cout << "begin file dumper\n";
     char *error;
     const char *filename = "packets.pcap";
-    pcap_dumper_t *fileDumper;
-    fileDumper = pcap_dump_open(p, filename);
-    if (fileDumper == NULL)
+    pcap_dumper_t * file_dumper;
+    file_dumper = pcap_dump_open(p,filename);
+    if (file_dumper == nullptr){
         error = pcap_geterr(p);
+        cout << error;
+        return 3;
+    }
+    //end file dumper
 
-
-    //place for filtres
-
-    bpf_program *bpf;
-
-
-    const char* fi = "tcp port 80 and host libpng.org";
-    int comp_optim = 1;
-    bpf_u_int32 netmask;
-    if (pcap_compile(p,bpf,fi,comp_optim,netmask) != 0){
-        fprintf(stderr, "Couldn't parse filter %s: %s\n", "we fucked up", pcap_geterr(p));
-        return(2);
-    };
-
-    pcap_setfilter(p,bpf);
-
-
+    cout << "begin capturing...\n";
     int count = -1;
-    errcode = pcap_loop(p,count,callback, (u_char *) fileDumper);
-    if (errcode != 0) {
-        errDescr = pcap_statustostr(errcode);
-        std::cout << "capturing error! ";
-        std::cout << errDescr << std::endl;
-    } else std::cout << "capturing ended" << std::endl;
-
-    pcap_dump_close(fileDumper);
+    errcode = pcap_loop(p,count,callback,(u_char *) file_dumper);
+    if (errcode != 0){
+        errDescription = pcap_statustostr(errcode);
+        cout  << "capturing error! \n" << errDescription << "\n";
+    }
+    else cout << "capturing ended\n";
+    pcap_dump_close(file_dumper);
     pcap_freecode(bpf);
+    free(bpf);
 
     return 0;
 }

@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.13)
-project(mycurse)
+project(cursefinal)
 
 set(CMAKE_CXX_STANDARD 14)
 
 #include (FindPCAP.cmake)
 #include_directories("/home/ellioterexet/PCAP/libpcap-1.9.0")
 
-SET(CMAKE_MODULE_PATH "/home/ellioterexet/CLionProjects/mycurse")
+SET(CMAKE_MODULE_PATH "/home/ellioterexet/CLionProjects/cursefinal/")
 find_package(PCAP)
 
 set(SOURCE_FILES main.cpp)
