@@ -80,16 +80,14 @@ vector <tcp_seq> ack,seq;
 vector <unsigned> file_name;
 
 void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet){
-    cout <<"callback started\n";
+    cout << endl;
     fstream image;
     static unsigned int count = 1;
     cout << count << " packet header: " << endl;
     cout << "Captured: " << hdr->caplen << " from total: " << hdr->len << endl;
     cout << "timestamp: " << hdr->ts.tv_sec << endl;
     count ++;
-    cout <<"dump\n";
     pcap_dump(user,hdr,packet);
-    cout <<"dumped\n";
 
 
     const struct sniff_ethernet *ethernet; /* The ethernet header */
@@ -109,13 +107,11 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
     }
     tcp = (struct sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
     size_tcp = TH_OFF(tcp)*4;
-    cout << "size tcp: "<< size_tcp << endl;
     if (size_tcp < 20) {
         printf("   * Invalid TCP header length: %u bytes\n", size_tcp);
         return;
     }
     if ((hdr->caplen-SIZE_ETHERNET-size_ip-size_tcp) <= 32){
-        cout << "packet looks to small" << endl;
         return;
     }
     payload = (u_char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
@@ -126,33 +122,25 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
     u_char* vie[4] = {(u_char*)0x89,(u_char*)'P',(u_char*)'N',(u_char*)'G'};
     u_char* vie2[6] = {(u_char*)0x48,(u_char*)0x54,(u_char*)0x54,(u_char*)0x50,(u_char*)0x2f,(u_char*)0x31};
 
-    cout << "png check try" << endl;
     auto flags = cout.flags();
-    cout << "before: " << &png_res << endl << "and payload: "<< &payload << endl;
     png_res = (u_char *) strstr((char *) payload, (char *)vie);
-    cout << "after: " << &png_res << endl;
     const u_char * http_res =(u_char *) strstr((char *) payload, (char *)vie2);
-
     if (png_res && http_res){
         if ( (png_res[1]!='P') || (png_res[2]!='N') || (png_res[3]!='G') || (png_res[4]!=0x0d) || (png_res[5]!=0x0a) || (png_res[6]!=0x1a) || (png_res[7]!=0x0a) ){
             png_res=payload;
-            cout << "blocked" << endl;
+            cout << "start png packet" << endl;
         }
         else {
-            cout << "png start passed ack: " << (u_long)tcp->th_ack << " seq: " << (u_long)tcp->th_seq << endl;
             seq.push_back(ntohl(tcp->th_seq));
             ack.push_back(tcp->th_ack);
-            cout << "hello "<< count << endl;
             file_name.push_back(count+(unsigned)tcp->th_ack);
             cout.flags(flags);
         }
     }
     else png_res=payload;
-    cout << "ack check" << endl;
     if (!ack.empty()){
         auto ack_iter = find(ack.begin(),ack.end(),tcp->th_ack);
         if (ack_iter == ack.end()){
-            cout << "not png's packet or not marked packet\n";
             return;
         }
         long index = distance(ack.begin(),ack_iter);
@@ -163,16 +151,14 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
 
         string name = to_string(file_name.at(index)) + "img.png";
 
-        cout << "test\n" << (u_short)tcp->th_seq << endl << tcp->th_seq << endl << ntohl(tcp->th_seq) << endl;
+        cout << "seq: " <<  ntohl(tcp->th_seq) << endl;
         auto flag = cout.flags();
 
         if (ntohl(tcp->th_seq)==seq.at(index)){
-            cout << "good packet" <<endl;
             seq.at(index)+=1448;
-            cout << "next seq: "<< seq.at(index);
+            cout << "next seq: "<< seq.at(index) << endl;
         }
         else {
-            cout << "bad packet"<<endl;
             return;
         }
 
@@ -184,28 +170,17 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
         }
         else cout << "writing to file" << endl;
 
-        bool first = true;
         while (&png_res[i] < &packet[hdr->caplen]) {
-
-            if (first){
-                cout << "first" << endl;
-                cout << hex << +png_res[i];
-                cout << "not last"<< endl;
-                first = false;
-            }
             image << png_res[i];
-            cout << hex << +png_res[i] << " ";
             i++;
         }
-        cout <<endl;
 
-        cout << "save to "+name;
+        cout << "saved to "+name;
         cout << endl;
         u_char *vie3[5]={(u_char*)'I',(u_char*)'E',(u_char*)'N',(u_char*)'D',(u_char* )'\0'};
         u_char *end_check;
         end_check = (u_char *)strstr((char *)(packet+hdr->caplen-8),(char *)vie3);
         if (end_check) {
-            //cout << "end pack try" << endl;
             if ((end_check[1] == 'E') && (end_check[2] == 'N') && (end_check[3] == 'D')) {
                 ack.erase(ack_iter);
                 file_name.erase(file_name_iter);
@@ -213,13 +188,14 @@ void callback (u_char *user, const struct pcap_pkthdr *hdr, const u_char *packet
                 cout << "ending png packet" << endl;
             }
         }
-        cout << endl << "png packet" << endl;
         image.flush();
         image.close();
 
         cout.flags(flag);
     }
     else cout << "ack empty" << endl;
+
+
 
 }//0x7fff8150fc10
 
@@ -228,10 +204,7 @@ int main(int argc, char* argv[]) {
     char errbuf[PCAP_ERRBUF_SIZE];
     int errcode;
     pcap_t *p;
-
-
     //begin device
-    cout << "begin devices\n";
     cout << "Print available devices? (Y/n):" << endl; //device list
     char ask[30];
     cin >> ask;
@@ -256,7 +229,6 @@ int main(int argc, char* argv[]) {
     //end device
 
 
-    cout << "begin activate\n";
     const char * errDescription;
     errcode = pcap_activate(p);
     if (errcode != 0){
@@ -268,7 +240,6 @@ int main(int argc, char* argv[]) {
     else cout <<"pcap activated\n";
 
     //begin filters
-    cout << "begin filers\n";
     cout << "print host: \n";
     char host [40];
     cin >> host;
@@ -289,7 +260,6 @@ int main(int argc, char* argv[]) {
     //end filters
 
     //begin file dumper
-    cout << "begin file dumper\n";
     char *error;
     const char *filename = "packets.pcap";
     pcap_dumper_t * file_dumper;
